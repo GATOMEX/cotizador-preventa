@@ -28,11 +28,29 @@ Primera hoja, primera fila = encabezados. Se reconocen (tolerante a acentos/may�
 
 Solo *nombre* es obligatorio.
 
-## Margen
+## Reglas de negocio
 
-Markup sobre costo: `venta = compra × (1 + margen%)`. Editar el margen recalcula
-la venta; editar la venta recalcula el margen. El margen global aplica a líneas
-nuevas y con **Aplicar a todo** se fuerza a todas.
+**Margen (markup sobre costo):** `venta = compra_DOP × (1 + margen%)`.
+- General: **60%**
+- Importado (checkbox por línea): **90%**
+
+Editar el margen recalcula la venta; editar la venta recalcula el margen.
+**Aplicar** fuerza el margen general a las líneas NO importadas.
+
+**Tipo de cambio USD→DOP:** tasa aplicada = **tasa de mercado + 2**
+(mercado DO$60 → se cotiza a DO$62). Cada línea puede estar en DOP o USD; si es
+USD, el costo se convierte a DOP con la tasa aplicada. Cambiar la tasa recalcula
+todas las líneas en USD.
+
+## Salida (Excel)
+
+- **Pestaña 1 — Cotización:** cabecera (cliente, tipo de proyecto, vendedor,
+  fecha, tasa aplicada), bloques con sus líneas y subtotales, totales generales
+  y el cuadro de consideraciones especiales.
+- **Pestaña 2 — Referencias:** origen de cada precio (moneda, precio original,
+  tasa aplicada, precio en DOP, fuente/lista).
+
+Sin fórmulas ni protección: totalmente editable.
 
 ## Publicar en GitHub Pages
 
@@ -53,8 +71,10 @@ líneas** a esos bloques; no se rehace la arquitectura.
 
 ## Roadmap
 
-- [x] Núcleo de líneas: Tecnología + cálculo margen/subtotal + Odoo + export
+- [x] Núcleo de líneas + cálculo margen/subtotal + Odoo + export
+- [x] Márgenes 60/90, tasa USD (+2), moneda por línea, referencias de precios
+- [ ] Integrar listas de precios de fabricantes (Hanwha, etc.) y mano de obra
 - [ ] Canalización: dado diámetro y metros → accesorios (codos, coples, cajas…)
-- [ ] Motor de completitud: p.ej. N cámaras XMP → sugerir NVR/switch PoE por canales/consumo
+- [ ] Motor de completitud: p.ej. N cámaras 8MP → sugerir NVR/switch PoE por canales/consumo
 - [ ] Persistencia local (localStorage) del borrador de cotización
 - [ ] Actualización del inventario Odoo (manual vs. archivo en repo)
