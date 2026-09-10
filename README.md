@@ -15,10 +15,30 @@ con cruce contra inventario de Odoo y exportación a Excel editable.
 5. **Exportar Excel** → genera `.xlsx` con una hoja por bloque + Resumen.
    Sin fórmulas ni protección: totalmente editable.
 
+## Datos base y actualización (sin cargar archivos cada vez)
+
+El inventario Odoo y las listas de precios viven **versionados en `data/`**
+(`odoo.json`, `catalogos.json`) y se **cargan solos** al abrir la app. No hay que
+subir archivos en cada uso.
+
+Para actualizar cuando cambien, usar el **⚙︎ (Configuración) → Datos base**:
+- *Actualizar inventario Odoo* / *Actualizar listas de precios* → se parsea el xlsx
+  y **reemplaza** la fuente; queda guardado como override local en IndexedDB (tiene
+  prioridad sobre `data/` del repo).
+- *Restablecer a base del repo* → borra los overrides locales.
+
+> El override es local a ese navegador. Para dejar la actualización como base
+> versionada (compartida), regenerar los JSON de `data/` y commitear — pendiente
+> automatizar con la GitHub API.
+
+La **cotización en curso se autoguarda** (IndexedDB) y se restaura al reabrir.
+El botón **Nueva** vacía la cotización.
+
+Regenerar los JSON base desde los xlsx: ver `tools/` (script de conversión).
+
 ## Listas de precios de fabricantes y mano de obra
 
-Botón **Cargar listas de precios…** (multi-archivo). Detección automática por
-formato; cada uno tiene su adaptador en `js/catalogos.js`:
+Cada formato tiene su adaptador en `js/catalogos.js` (detección automática):
 
 | Archivo | Hoja | Se toma como |
 |---------|------|--------------|

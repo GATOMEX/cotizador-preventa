@@ -13,15 +13,44 @@
       <span class="muted">AWM Sistemas de Seguridad</span>
     </div>
     <div class="topbar-actions">
-      <span id="odooStatus" class="pill pill-warn">Odoo: sin cargar</span>
-      <span id="catStatus" class="pill pill-warn">Listas: 0</span>
-      <input type="file" id="odooFile" accept=".xlsx,.xls" hidden />
-      <input type="file" id="catFile" accept=".xlsx,.xls" multiple hidden />
-      <button id="odooBtn" class="btn">Cargar Odoo…</button>
-      <button id="catBtn" class="btn">Cargar listas de precios…</button>
+      <span id="baseStatus" class="pill pill-warn">Cargando base…</span>
+      <button id="nuevoBtn" class="btn" title="Vaciar la cotización actual">Nueva</button>
+      <button id="settingsBtn" class="btn" title="Configuración y listas base">⚙︎</button>
       <button id="exportBtn" class="btn btn-primary">Exportar Excel</button>
     </div>
   </header>
+
+  <!-- Modal de configuración -->
+  <div id="settings" class="modal" hidden>
+    <div class="modal-card">
+      <div class="modal-head">
+        <h2>Configuración</h2>
+        <button id="settingsClose" class="btn btn-sm">Cerrar ✕</button>
+      </div>
+      <nav class="modal-tabs">
+        <button class="tab active" data-tab="datos">Datos base</button>
+        <button class="tab" data-tab="canalizacion" disabled>Canalización (próx.)</button>
+        <button class="tab" data-tab="cableado" disabled>Cableado (próx.)</button>
+      </nav>
+
+      <section class="tab-panel" data-panel="datos">
+        <p class="muted">Las listas se cargan solas desde el repositorio. Aquí las
+          actualizas cuando cambien; el archivo nuevo reemplaza al anterior y queda
+          guardado en este navegador.</p>
+        <table class="src-table">
+          <thead><tr><th>Fuente</th><th>Ítems</th><th>Origen</th><th></th></tr></thead>
+          <tbody id="srcBody"></tbody>
+        </table>
+        <div class="src-actions">
+          <input type="file" id="odooFile" accept=".xlsx,.xls" hidden />
+          <input type="file" id="catFile" accept=".xlsx,.xls" multiple hidden />
+          <button id="updOdoo" class="btn btn-sm">Actualizar inventario Odoo…</button>
+          <button id="updCat" class="btn btn-sm">Actualizar listas de precios…</button>
+          <button id="resetBase" class="btn btn-sm btn-danger">Restablecer a base del repo</button>
+        </div>
+      </section>
+    </div>
+  </div>
 
   <main class="wrap">
     <section class="meta card">

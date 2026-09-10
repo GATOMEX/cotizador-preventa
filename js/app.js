@@ -1,5 +1,6 @@
 import * as Odoo from './odoo.js';
 import * as Catalogos from './catalogos.js';
+import * as Data from './data.js';
 import { exportQuote } from './exportXlsx.js';
 
 // ---- Modelo -------------------------------------------------------------
@@ -68,6 +69,19 @@ function render() {
   blocksEl.innerHTML = '';
   for (const b of BLOCKS) blocksEl.appendChild(renderBlock(b));
   renderTotals();
+  schedulePersist();
+}
+
+// ---- Persistencia del borrador (IndexedDB, debounced) ------------------
+let persistT = null;
+function schedulePersist() {
+  clearTimeout(persistT);
+  persistT = setTimeout(() => {
+    Data.saveBorrador({
+      meta, marginGlobal,
+      blocks: BLOCKS.map(b => ({ id: b.id, lines: b.lines })),
+    }).catch(() => {});
+  }, 400);
 }
 
 function renderBlock(b) {
@@ -163,6 +177,7 @@ function onField(l, inp, tr, inputs) {
   }
   tr.querySelector('[data-sub]').textContent = fmt(l.venta * l.cantidad);
   renderTotals();
+  schedulePersist();
 }
 
 function syncRow(l, tr, inputs) {
@@ -271,53 +286,70 @@ function refreshDatalist() {
   dl.appendChild(frag);
 }
 
-$('#odooBtn').onclick = () => $('#odooFile').click();
+// ---- Settings (datos base) ---------------------------------------------
+let baseMeta = { odoo: null, cat: null };
+
+function renderBaseStatus() {
+  $('#baseStatus').textContent = `Odoo ${Odoo.odooCount()} · Listas ${Catalogos.count()}`;
+  $('#baseStatus').className = 'pill pill-ok';
+}
+
+function renderSrcTable() {
+  const rows = [];
+  const oOrig = baseMeta.odoo?.origen === 'local'
+    ? `actualizado ${baseMeta.odoo.fecha || ''}` : 'repositorio';
+  rows.push(`<tr><td>Inventario Odoo</td><td>${Odoo.odooCount()}</td><td>${oOrig}</td><td></td></tr>`);
+  const cOrig = baseMeta.cat?.origen === 'local'
+    ? `actualizado ${baseMeta.cat.fecha || ''}` : 'repositorio';
+  for (const s of Catalogos.sources())
+    rows.push(`<tr><td>${s.origen}</td><td>${s.count}</td><td>${cOrig}</td><td></td></tr>`);
+  $('#srcBody').innerHTML = rows.join('');
+}
+
+$('#settingsBtn').onclick = () => { renderSrcTable(); $('#settings').hidden = false; };
+$('#settingsClose').onclick = () => { $('#settings').hidden = true; };
+$('#settings').addEventListener('click', e => { if (e.target.id === 'settings') $('#settings').hidden = true; });
+
+$('#updOdoo').onclick = () => $('#odooFile').click();
 $('#odooFile').addEventListener('change', async (e) => {
-  const file = e.target.files[0];
-  if (!file) return;
+  const file = e.target.files[0]; if (!file) return;
   try {
     const buf = await file.arrayBuffer();
-    const { count } = Odoo.loadOdooFromArrayBuffer(buf);
-    refreshDatalist();
-    const s = $('#odooStatus');
-    s.textContent = `Odoo: ${count} productos`;
-    s.className = 'pill pill-ok';
-  } catch (err) {
-    alert('No pude leer el Excel de Odoo: ' + err.message);
-  }
+    const { count, meta: m } = await Data.updateOdoo(buf);
+    baseMeta.odoo = m; refreshDatalist(); renderBaseStatus(); renderSrcTable();
+    alert(`Inventario Odoo actualizado: ${count} productos.`);
+  } catch (err) { alert('No pude leer el Excel de Odoo: ' + err.message); }
   e.target.value = '';
 });
 
-$('#catBtn').onclick = () => $('#catFile').click();
+$('#updCat').onclick = () => $('#catFile').click();
 $('#catFile').addEventListener('change', async (e) => {
-  const files = [...e.target.files];
-  if (!files.length) return;
+  const files = [...e.target.files]; if (!files.length) return;
   try {
-    const { results, total, sources } = await Catalogos.loadFiles(files);
-    refreshDatalist();
-    const s = $('#catStatus');
-    s.textContent = `Listas: ${total} ítems (${sources.length})`;
-    s.className = 'pill pill-ok';
+    const { results, total, meta: m } = await Data.updateCatalogos(files);
+    baseMeta.cat = m; refreshDatalist(); renderBaseStatus(); renderSrcTable();
     const resumen = results.map(r =>
       r.tipo === 'error' ? `✗ ${r.file}: ${r.error}`
       : r.tipo === 'desconocido' ? `? ${r.file}: formato no reconocido`
       : `✓ ${r.file} → ${r.tipo}: ${r.count}`).join('\n');
-    console.log('[catálogos]\n' + resumen);
-    const fallidos = results.filter(r => r.tipo === 'error' || r.tipo === 'desconocido');
-    if (fallidos.length) alert('Algunas listas no se cargaron:\n' + resumen);
-  } catch (err) {
-    alert('Error cargando listas: ' + err.message);
-  }
+    alert(`Listas actualizadas (${total} ítems):\n` + resumen);
+  } catch (err) { alert('Error cargando listas: ' + err.message); }
   e.target.value = '';
 });
 
+$('#resetBase').onclick = async () => {
+  if (!confirm('¿Restablecer Odoo y las listas a la versión del repositorio? Se borran las actualizaciones locales.')) return;
+  const { meta: m } = await Data.resetToRepo();
+  baseMeta = m; refreshDatalist(); renderBaseStatus(); renderSrcTable();
+  alert('Listas restablecidas a la base del repositorio.');
+};
+
 // ---- Meta + tasa + margen global ---------------------------------------
-$('#metaCliente').addEventListener('input', e => meta.cliente = e.target.value);
-$('#metaTipo').addEventListener('input', e => meta.tipoProyecto = e.target.value);
-$('#metaVendedor').addEventListener('input', e => meta.vendedor = e.target.value);
-$('#metaFecha').value = meta.fecha;
-$('#metaFecha').addEventListener('input', e => meta.fecha = e.target.value);
-$('#metaConsideraciones').addEventListener('input', e => meta.consideraciones = e.target.value);
+$('#metaCliente').addEventListener('input', e => { meta.cliente = e.target.value; schedulePersist(); });
+$('#metaTipo').addEventListener('input', e => { meta.tipoProyecto = e.target.value; schedulePersist(); });
+$('#metaVendedor').addEventListener('input', e => { meta.vendedor = e.target.value; schedulePersist(); });
+$('#metaFecha').addEventListener('input', e => { meta.fecha = e.target.value; schedulePersist(); });
+$('#metaConsideraciones').addEventListener('input', e => { meta.consideraciones = e.target.value; schedulePersist(); });
 $('#tasaMercado').addEventListener('input', e => {
   meta.tasaMercado = Number(e.target.value) || 0;
   $('#tasaAplicada').value = tasaAplicada().toFixed(2);
@@ -332,7 +364,17 @@ $('#applyMarginAll').onclick = () => {
   render();
 };
 
-// ---- Export -------------------------------------------------------------
+// ---- Nueva cotización / Export -----------------------------------------
+$('#nuevoBtn').onclick = async () => {
+  if (!confirm('¿Vaciar la cotización actual y empezar una nueva?')) return;
+  for (const b of BLOCKS) b.lines = [];
+  meta.cliente = meta.tipoProyecto = meta.vendedor = meta.consideraciones = '';
+  meta.fecha = new Date().toISOString().slice(0, 10);
+  await Data.clearBorrador();
+  hydrateMetaInputs();
+  render();
+};
+
 $('#exportBtn').onclick = () => {
   if (!BLOCKS.some(b => b.lines.length)) { alert('Agrega al menos una línea antes de exportar.'); return; }
   exportQuote({
@@ -342,6 +384,44 @@ $('#exportBtn').onclick = () => {
   });
 };
 
-// arranque
-$('#tasaAplicada').value = tasaAplicada().toFixed(2);
-render();
+// ---- Arranque -----------------------------------------------------------
+function hydrateMetaInputs() {
+  $('#metaCliente').value = meta.cliente || '';
+  $('#metaTipo').value = meta.tipoProyecto || '';
+  $('#metaVendedor').value = meta.vendedor || '';
+  $('#metaFecha').value = meta.fecha || '';
+  $('#metaConsideraciones').value = meta.consideraciones || '';
+  $('#tasaMercado').value = meta.tasaMercado ?? 60;
+  $('#marginGlobal').value = marginGlobal;
+  $('#tasaAplicada').value = tasaAplicada().toFixed(2);
+}
+
+async function init() {
+  try {
+    const res = await Data.loadBase();
+    baseMeta = res.meta;
+  } catch (err) {
+    $('#baseStatus').textContent = 'Error cargando base';
+    console.error(err);
+  }
+  // restaurar borrador si existe
+  try {
+    const b = await Data.loadBorrador();
+    if (b) {
+      Object.assign(meta, b.meta || {});
+      if (typeof b.marginGlobal === 'number') marginGlobal = b.marginGlobal;
+      if (Array.isArray(b.blocks))
+        for (const sb of b.blocks) {
+          const blk = BLOCKS.find(x => x.id === sb.id);
+          if (blk && Array.isArray(sb.lines)) blk.lines = sb.lines;
+        }
+    }
+  } catch (err) { console.error(err); }
+
+  hydrateMetaInputs();
+  refreshDatalist();
+  renderBaseStatus();
+  render();
+}
+
+init();

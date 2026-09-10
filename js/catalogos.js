@@ -145,15 +145,20 @@ export async function loadFiles(fileList) {
       results.push({ file: file.name, tipo: 'error', count: 0, error: e.message });
     }
   }
-  SOURCES = Object.values(ITEMS.reduce((a, i) => {
-    (a[i.origen] ??= { origen: i.origen, tipo: i.tipo, count: 0 }).count++; return a;
-  }, {}));
+  recomputeSources();
   return { results, total: ITEMS.length, sources: SOURCES };
 }
 
 export function count() { return ITEMS.length; }
 export function sources() { return SOURCES; }
 export function all() { return ITEMS; }
+
+function recomputeSources() {
+  SOURCES = Object.values(ITEMS.reduce((a, i) => {
+    (a[i.origen] ??= { origen: i.origen, tipo: i.tipo, count: 0 }).count++; return a;
+  }, {}));
+}
+export function setItems(arr) { ITEMS = Array.isArray(arr) ? arr : []; recomputeSources(); }
 
 export function search(query, limit = 40) {
   const q = norm(query);

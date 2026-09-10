@@ -1,0 +1,18 @@
+{
+ "generado": "2026-09-10",
+ "fuentes": {
+  "odoo": {
+   "archivo": "Productos Odoo.xlsx",
+   "items": 3034
+  },
+  "Hanwha": {
+   "items": 1253
+  },
+  "Axis": {
+   "items": 1616
+  },
+  "ManoObra": {
+   "items": 89
+  }
+ }
+}

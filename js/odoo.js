@@ -54,6 +54,7 @@ export function loadOdooFromArrayBuffer(buf) {
 
 export function odooCount() { return PRODUCTS.length; }
 export function allProducts() { return PRODUCTS; }
+export function setProducts(arr) { PRODUCTS = Array.isArray(arr) ? arr : []; }
 
 // Búsqueda simple por tokens contenidos (nombre o código).
 export function search(query, limit = 30) {
