@@ -1,4 +1,5 @@
 import * as Odoo from './odoo.js';
+import * as Catalogos from './catalogos.js';
 import { exportQuote } from './exportXlsx.js';
 
 // ---- Modelo -------------------------------------------------------------
@@ -132,7 +133,7 @@ function renderRow(b, l) {
     const evt = (inp.type === 'checkbox' || inp.tagName === 'SELECT') ? 'change' : 'input';
     inp.addEventListener(evt, () => onField(l, inp, tr, inputs));
     if (inp.dataset.f === 'descripcion' || inp.dataset.f === 'codigo')
-      inp.addEventListener('change', () => tryOdoo(l));
+      inp.addEventListener('change', () => tryResolve(l));
   });
   tr.querySelector('.btn-danger').onclick = () => {
     b.lines = b.lines.filter(x => x.id !== l.id); render();
@@ -171,7 +172,36 @@ function syncRow(l, tr, inputs) {
   renderTotals();
 }
 
-function tryOdoo(l) {
+// Resuelve una línea: primero contra catálogos de fabricante / mano de obra,
+// luego contra inventario Odoo. Si es producto de fabricante, además cruza con
+// Odoo para traer código interno y existencia cuando coincida.
+function tryResolve(l) {
+  const cat = Catalogos.match(l.codigo) || Catalogos.match(l.descripcion);
+  if (cat) { applyCatalog(l, cat); return; }
+  applyOdoo(l);
+}
+
+function applyCatalog(l, rec) {
+  l.descripcion = rec.nombre;
+  l.fuente = rec.origen;
+  if (rec.tipo === 'mano_obra') {
+    // la tarifa listada ES el precio de venta (no se le aplica margen)
+    l.moneda = 'DOP';
+    l.venta = round2(rec.moneda === 'USD' ? rec.venta * tasaAplicada() : rec.venta);
+    l.compraOrig = 0; l.margen = 0; l.importado = false;
+  } else {
+    l.moneda = rec.moneda;
+    l.compraOrig = round2(rec.costo || 0);
+    l.importado = rec.moneda === 'USD';
+    l.margen = l.importado ? MARGIN_IMPORTADO : marginGlobal;
+    l.venta = ventaFromMargin(l);
+    if (rec.codigoFab) l.codigo = rec.codigoFab;
+    crossOdoo(l);   // intenta traer código interno + existencia desde Odoo
+  }
+  render();
+}
+
+function applyOdoo(l) {
   if (!Odoo.odooCount()) return;
   const hit = Odoo.match({ descripcion: l.descripcion, codigo: l.codigo });
   if (!hit) return;
@@ -179,12 +209,23 @@ function tryOdoo(l) {
   if (hit.codigo) l.codigo = hit.codigo;
   l.existencia = hit.existencia;
   if (hit.precio != null && hit.precio > 0) {
-    l.moneda = 'DOP';                 // el precio de Odoo se asume en DOP
+    l.moneda = 'DOP';                 // el coste de Odoo se asume en DOP
     l.compraOrig = round2(hit.precio);
+    l.importado = false;
+    l.margen = marginGlobal;
     l.venta = ventaFromMargin(l);
     if (!l.fuente) l.fuente = 'Odoo (inventario)';
   }
   render();
+}
+
+// para un producto ya resuelto por fabricante, busca su código/existencia en Odoo
+function crossOdoo(l) {
+  if (!Odoo.odooCount()) return;
+  const hit = Odoo.match({ descripcion: l.descripcion, codigo: l.codigo });
+  if (!hit) return;
+  if (hit.codigo) l.codigo = hit.codigo;   // preferimos el código interno de Odoo
+  l.existencia = hit.existencia;
 }
 
 function renderTotals() {
@@ -208,16 +249,26 @@ function recalcUSD() {
   render();
 }
 
-// ---- Odoo: carga + datalist --------------------------------------------
+// ---- Datalist unificado (Odoo + catálogos) -----------------------------
 function refreshDatalist() {
   const dl = $('#odooList');
-  dl.innerHTML = '';
-  for (const p of Odoo.allProducts().slice(0, 2000)) {
+  const frag = document.createDocumentFragment();
+  for (const p of Odoo.allProducts()) {
     const o = document.createElement('option');
     o.value = p.nombre;
-    o.label = p.codigo ? `${p.codigo} · stock ${p.existencia ?? '?'}` : '';
-    dl.appendChild(o);
+    o.label = `Odoo${p.codigo ? ' ' + p.codigo : ''} · stock ${p.existencia ?? '?'}`;
+    frag.appendChild(o);
   }
+  for (const it of Catalogos.all()) {
+    const o = document.createElement('option');
+    o.value = it.nombre;
+    o.label = it.tipo === 'mano_obra'
+      ? `${it.origen} · ${it.moneda} ${it.venta}`
+      : `${it.origen} · costo ${it.moneda} ${it.costo}`;
+    frag.appendChild(o);
+  }
+  dl.innerHTML = '';
+  dl.appendChild(frag);
 }
 
 $('#odooBtn').onclick = () => $('#odooFile').click();
@@ -234,6 +285,30 @@ $('#odooFile').addEventListener('change', async (e) => {
   } catch (err) {
     alert('No pude leer el Excel de Odoo: ' + err.message);
   }
+  e.target.value = '';
+});
+
+$('#catBtn').onclick = () => $('#catFile').click();
+$('#catFile').addEventListener('change', async (e) => {
+  const files = [...e.target.files];
+  if (!files.length) return;
+  try {
+    const { results, total, sources } = await Catalogos.loadFiles(files);
+    refreshDatalist();
+    const s = $('#catStatus');
+    s.textContent = `Listas: ${total} ítems (${sources.length})`;
+    s.className = 'pill pill-ok';
+    const resumen = results.map(r =>
+      r.tipo === 'error' ? `✗ ${r.file}: ${r.error}`
+      : r.tipo === 'desconocido' ? `? ${r.file}: formato no reconocido`
+      : `✓ ${r.file} → ${r.tipo}: ${r.count}`).join('\n');
+    console.log('[catálogos]\n' + resumen);
+    const fallidos = results.filter(r => r.tipo === 'error' || r.tipo === 'desconocido');
+    if (fallidos.length) alert('Algunas listas no se cargaron:\n' + resumen);
+  } catch (err) {
+    alert('Error cargando listas: ' + err.message);
+  }
+  e.target.value = '';
 });
 
 // ---- Meta + tasa + margen global ---------------------------------------

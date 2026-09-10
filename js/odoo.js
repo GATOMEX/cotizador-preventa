@@ -9,9 +9,9 @@
 
 const HEADER_ALIASES = {
   nombre:     ['nombre', 'descripcion', 'descripción', 'producto', 'product', 'name'],
-  codigo:     ['codigo interno', 'código interno', 'codigo', 'código', 'default_code', 'ref', 'referencia', 'internal reference'],
-  existencia: ['existencia', 'stock', 'qty_available', 'disponible', 'cantidad', 'cantidad a mano', 'on hand'],
-  precio:     ['precio', 'precio de compra', 'costo', 'coste', 'standard_price', 'cost', 'precio de coste'],
+  codigo:     ['codigo interno', 'código interno', 'referencia interna', 'codigo', 'código', 'default_code', 'ref', 'referencia', 'internal reference'],
+  existencia: ['existencia', 'stock', 'stock real', 'qty_available', 'disponible', 'cantidad', 'cantidad a mano', 'on hand'],
+  precio:     ['precio de compra', 'costo', 'coste', 'standard_price', 'cost', 'precio de coste'],
 };
 
 let PRODUCTS = [];   // [{nombre, codigo, existencia, precio}]

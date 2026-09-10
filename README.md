@@ -15,6 +15,26 @@ con cruce contra inventario de Odoo y exportación a Excel editable.
 5. **Exportar Excel** → genera `.xlsx` con una hoja por bloque + Resumen.
    Sin fórmulas ni protección: totalmente editable.
 
+## Listas de precios de fabricantes y mano de obra
+
+Botón **Cargar listas de precios…** (multi-archivo). Detección automática por
+formato; cada uno tiene su adaptador en `js/catalogos.js`:
+
+| Archivo | Hoja | Se toma como |
+|---------|------|--------------|
+| Hanwha.xlsx | `HVA Pricelist` | producto USD, costo = **Costo AWM** → margen 90% |
+| Axis.xls | `All products` | producto USD, costo = **COSTO AWM** → margen 90% |
+| lista de MO AWM.xlsx | hojas con `CONCEPTO` | mano de obra: la tarifa listada **es el precio de venta** (sin margen) |
+
+Al escribir en la descripción de una línea, el autocompletado sugiere de Odoo +
+todas las listas cargadas. Al elegir un producto de fabricante se rellena
+código, moneda (USD→importado 90%) y costo; si el mismo producto existe en Odoo,
+se sustituye por el código interno y la existencia. Para mano de obra se fija el
+precio de venta (convertido a DOP si la tarifa está en USD).
+
+Agregar un fabricante nuevo = un adaptador más en `catalogos.js` (detección por
+nombre de hoja + mapeo de columnas). No cambia el resto de la app.
+
 ## Formato del Excel de Odoo
 
 Primera hoja, primera fila = encabezados. Se reconocen (tolerante a acentos/mayúsculas):
@@ -73,7 +93,8 @@ líneas** a esos bloques; no se rehace la arquitectura.
 
 - [x] Núcleo de líneas + cálculo margen/subtotal + Odoo + export
 - [x] Márgenes 60/90, tasa USD (+2), moneda por línea, referencias de precios
-- [ ] Integrar listas de precios de fabricantes (Hanwha, etc.) y mano de obra
+- [x] Listas de precios: Hanwha, Axis, mano de obra (adaptadores en catalogos.js)
+- [ ] APP VISITANTES (software propio) y cotizaciones puntuales de mayoristas
 - [ ] Canalización: dado diámetro y metros → accesorios (codos, coples, cajas…)
 - [ ] Motor de completitud: p.ej. N cámaras 8MP → sugerir NVR/switch PoE por canales/consumo
 - [ ] Persistencia local (localStorage) del borrador de cotización

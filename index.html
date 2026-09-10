@@ -14,8 +14,11 @@
     </div>
     <div class="topbar-actions">
       <span id="odooStatus" class="pill pill-warn">Odoo: sin cargar</span>
+      <span id="catStatus" class="pill pill-warn">Listas: 0</span>
       <input type="file" id="odooFile" accept=".xlsx,.xls" hidden />
-      <button id="odooBtn" class="btn">Cargar inventario Odoo…</button>
+      <input type="file" id="catFile" accept=".xlsx,.xls" multiple hidden />
+      <button id="odooBtn" class="btn">Cargar Odoo…</button>
+      <button id="catBtn" class="btn">Cargar listas de precios…</button>
       <button id="exportBtn" class="btn btn-primary">Exportar Excel</button>
     </div>
   </header>
