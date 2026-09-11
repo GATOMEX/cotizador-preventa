@@ -22,17 +22,25 @@ export function exportQuote({ meta, blocks, compraDOP }) {
                 'P. venta (DOP)', 'Cantidad', 'Subtotal (DOP)'];
   let gCosto = 0, gVenta = 0;
 
+  const grupos = (b) => b.grupos || [{ nombre: '', lines: b.lines || [] }];
+
   for (const b of blocks) {
-    if (!b.lines.length) continue;
+    if (!grupos(b).some(g => g.lines.length)) continue;
     rows.push([b.title.toUpperCase()]);
-    rows.push(HEAD);
     let bCosto = 0, bVenta = 0;
-    for (const l of b.lines) {
-      const c = compraDOP(l), q = Number(l.cantidad) || 0;
-      const sub = money(l.venta * q);
-      rows.push([l.descripcion || '', l.codigo || '', money(c), Number(l.margen) || 0,
-                 money(l.venta), q, sub]);
-      bCosto += c * q; bVenta += l.venta * q;
+    for (const g of grupos(b)) {
+      if (!g.lines.length) continue;
+      if (b.multi) rows.push([`  ▸ ${g.nombre || 'Sin nombre'}`]);   // subtítulo del apartado
+      rows.push(HEAD);
+      let sCosto = 0, sVenta = 0;
+      for (const l of g.lines) {
+        const c = compraDOP(l), q = Number(l.cantidad) || 0;
+        rows.push([l.descripcion || '', l.codigo || '', money(c), Number(l.margen) || 0,
+                   money(l.venta), q, money(l.venta * q)]);
+        sCosto += c * q; sVenta += l.venta * q;
+      }
+      if (b.multi) rows.push(['', '', '', '', '', `Subtotal ${g.nombre || ''}`.trim(), money(sVenta)]);
+      bCosto += sCosto; bVenta += sVenta;
     }
     rows.push(['', '', '', '', '', 'Subtotal bloque', money(bVenta)]);
     rows.push([]);
@@ -54,14 +62,17 @@ export function exportQuote({ meta, blocks, compraDOP }) {
   XLSX.utils.book_append_sheet(wb, ws1, 'Cotización');
 
   // ---- Pestaña 2: Referencias de precios ----
-  const ref = [['Bloque', 'Descripción', 'Código', 'Moneda', 'P. compra (orig)',
+  const ref = [['Bloque / apartado', 'Descripción', 'Código', 'Moneda', 'P. compra (orig)',
                 'Tasa aplicada', 'P. compra (DOP)', 'Fuente / referencia']];
   for (const b of blocks) {
-    for (const l of b.lines) {
-      ref.push([b.title, l.descripcion || '', l.codigo || '', l.moneda,
-                money(l.compraOrig),
-                l.moneda === 'USD' ? money(meta.tasaAplicada) : '',
-                money(compraDOP(l)), l.fuente || '']);
+    for (const g of grupos(b)) {
+      const etq = b.multi && g.nombre ? `${b.title} · ${g.nombre}` : b.title;
+      for (const l of g.lines) {
+        ref.push([etq, l.descripcion || '', l.codigo || '', l.moneda,
+                  money(l.compraOrig),
+                  l.moneda === 'USD' ? money(meta.tasaAplicada) : '',
+                  money(compraDOP(l)), l.fuente || '']);
+      }
     }
   }
   const ws2 = XLSX.utils.aoa_to_sheet(ref);

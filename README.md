@@ -68,6 +68,13 @@ Primera hoja, primera fila = encabezados. Se reconocen (tolerante a acentos/may�
 
 Solo *nombre* es obligatorio.
 
+## Apartados (Tecnología)
+
+El bloque **Tecnología** admite varios **apartados** (CCTV, alarmas, wifi…), cada
+uno con nombre editable y sus propias líneas (*+ Agregar apartado*). Ferretería,
+Cableado y Mano de obra son bloques de una sola tabla. En el Excel de salida cada
+apartado sale como subtítulo con su propio subtotal, más el subtotal del bloque.
+
 ## Reglas de negocio
 
 **Margen (markup sobre costo):** `venta = compra_DOP × (1 + margen%)`.

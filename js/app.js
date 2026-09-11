@@ -4,18 +4,23 @@ import * as Data from './data.js';
 import { exportQuote } from './exportXlsx.js';
 
 // ---- Modelo -------------------------------------------------------------
-// Todos los bloques comparten el mismo modelo de línea. Canalización y el
-// motor de completitud (fases siguientes) sólo EMPUJAN líneas a estos arrays.
+// Cada bloque agrupa líneas en "apartados" (grupos). Tecnología es `multi`:
+// permite varios apartados con nombre (CCTV, Alarmas, WiFi…). Los demás bloques
+// tienen un único apartado sin nombre. El modelo de línea es común a todos.
+const grupo = (nombre = '') => ({ id: crypto.randomUUID(), nombre, lines: [] });
+
 const BLOCKS = [
-  { id: 'tecnologia', title: 'Tecnología', sheet: 'Tecnologia',
-    sub: 'Cámaras, NVR/DVR, switches PoE, control de acceso…', lines: [] },
-  { id: 'ferreteria', title: 'Materiales ferreteros', sheet: 'Ferreteria',
-    sub: 'Tubería/canalización y accesorios (auto-relleno: fase próxima)', lines: [] },
-  { id: 'cableado', title: 'Cableado y accesorios', sheet: 'Cableado',
-    sub: 'UTP, conectores, jacks, patch cords…', lines: [] },
-  { id: 'manoObra', title: 'Mano de obra', sheet: 'ManoObra',
-    sub: 'Instalación, configuración, puesta en marcha', lines: [] },
+  { id: 'tecnologia', title: 'Tecnología', sheet: 'Tecnologia', multi: true,
+    sub: 'Apartados por sistema: CCTV, alarmas, wifi…', grupos: [grupo('CCTV')] },
+  { id: 'ferreteria', title: 'Materiales ferreteros', sheet: 'Ferreteria', multi: false,
+    sub: 'Tubería/canalización y accesorios (auto-relleno: fase próxima)', grupos: [grupo()] },
+  { id: 'cableado', title: 'Cableado y accesorios', sheet: 'Cableado', multi: false,
+    sub: 'UTP, conectores, jacks, patch cords…', grupos: [grupo()] },
+  { id: 'manoObra', title: 'Mano de obra', sheet: 'ManoObra', multi: false,
+    sub: 'Instalación, configuración, puesta en marcha', grupos: [grupo()] },
 ];
+
+const allLines = (b) => b.grupos.flatMap(g => g.lines);
 
 const MARGIN_GENERAL = 60;
 const MARGIN_IMPORTADO = 90;
@@ -79,47 +84,91 @@ function schedulePersist() {
   persistT = setTimeout(() => {
     Data.saveBorrador({
       meta, marginGlobal,
-      blocks: BLOCKS.map(b => ({ id: b.id, lines: b.lines })),
+      blocks: BLOCKS.map(b => ({
+        id: b.id,
+        grupos: b.grupos.map(g => ({ nombre: g.nombre, lines: g.lines })),
+      })),
     }).catch(() => {});
   }, 400);
 }
 
+const THEAD = `
+  <thead><tr>
+    <th>Descripción</th>
+    <th class="col-code">Código Odoo</th>
+    <th class="col-cur">Moneda</th>
+    <th class="col-money">P. compra</th>
+    <th class="col-imp">Imp.</th>
+    <th class="col-margin">Margen %</th>
+    <th class="col-money">P. venta (DOP)</th>
+    <th class="col-qty">Cant.</th>
+    <th class="col-money">Subtotal</th>
+    <th class="col-src">Fuente precio</th>
+    <th class="col-act"></th>
+  </tr></thead>`;
+
 function renderBlock(b) {
   const wrap = document.createElement('section');
   wrap.className = 'block card';
-  wrap.innerHTML = `
-    <div class="block-head">
-      <div><h2>${b.title}</h2><div class="block-sub">${b.sub}</div></div>
-      <button class="btn btn-sm" data-add="${b.id}">+ Agregar línea</button>
-    </div>
-    <div class="table-wrap"><table>
-      <thead><tr>
-        <th>Descripción</th>
-        <th class="col-code">Código Odoo</th>
-        <th class="col-cur">Moneda</th>
-        <th class="col-money">P. compra</th>
-        <th class="col-imp">Imp.</th>
-        <th class="col-margin">Margen %</th>
-        <th class="col-money">P. venta (DOP)</th>
-        <th class="col-qty">Cant.</th>
-        <th class="col-money">Subtotal</th>
-        <th class="col-src">Fuente precio</th>
-        <th class="col-act"></th>
-      </tr></thead>
-      <tbody></tbody>
-    </table></div>`;
-  const tb = $('tbody', wrap);
-  if (!b.lines.length) {
-    tb.innerHTML = `<tr><td colspan="11" class="muted center" style="padding:14px">
-      Sin líneas. Usa “+ Agregar línea”.</td></tr>`;
-  } else {
-    for (const l of b.lines) tb.appendChild(renderRow(b, l));
+  const head = document.createElement('div');
+  head.className = 'block-head';
+  head.innerHTML = `<div><h2>${b.title}</h2><div class="block-sub">${b.sub}</div></div>`;
+  if (b.multi) {
+    const addG = document.createElement('button');
+    addG.className = 'btn btn-sm';
+    addG.textContent = '+ Agregar apartado';
+    addG.onclick = () => { b.grupos.push(grupo('Nuevo apartado')); render(); };
+    head.appendChild(addG);
   }
-  $(`[data-add="${b.id}"]`, wrap).onclick = () => { b.lines.push(newLine()); render(); };
+  wrap.appendChild(head);
+  for (const g of b.grupos) wrap.appendChild(renderGrupo(b, g));
   return wrap;
 }
 
-function renderRow(b, l) {
+function renderGrupo(b, g) {
+  const box = document.createElement('div');
+  box.className = 'grupo';
+
+  if (b.multi) {
+    const gh = document.createElement('div');
+    gh.className = 'grupo-head';
+    gh.innerHTML = `
+      <input class="grupo-nombre" value="${esc(g.nombre)}"
+        placeholder="Nombre del apartado (CCTV, Alarmas, WiFi…)" />
+      <button class="btn btn-sm btn-danger" title="Eliminar apartado">Eliminar apartado ✕</button>`;
+    gh.querySelector('.grupo-nombre').addEventListener('input', e => {
+      g.nombre = e.target.value; schedulePersist();
+    });
+    gh.querySelector('.btn-danger').onclick = () => {
+      if (g.lines.length && !confirm(`¿Eliminar el apartado "${g.nombre || 'sin nombre'}" y sus ${g.lines.length} línea(s)?`)) return;
+      b.grupos = b.grupos.filter(x => x.id !== g.id);
+      if (!b.grupos.length) b.grupos.push(grupo('CCTV'));
+      render();
+    };
+    box.appendChild(gh);
+  }
+
+  const tw = document.createElement('div');
+  tw.className = 'table-wrap';
+  tw.innerHTML = `<table>${THEAD}<tbody></tbody></table>`;
+  const tb = $('tbody', tw);
+  if (!g.lines.length) {
+    tb.innerHTML = `<tr><td colspan="11" class="muted center" style="padding:12px">
+      Sin líneas. Usa “+ Agregar línea”.</td></tr>`;
+  } else {
+    for (const l of g.lines) tb.appendChild(renderRow(g, l));
+  }
+  box.appendChild(tw);
+
+  const add = document.createElement('button');
+  add.className = 'btn btn-sm add-line';
+  add.textContent = '+ Agregar línea';
+  add.onclick = () => { g.lines.push(newLine()); render(); };
+  box.appendChild(add);
+  return box;
+}
+
+function renderRow(g, l) {
   const tr = document.createElement('tr');
   const existBadge = l.existencia === null || l.existencia === undefined ? ''
     : `<span class="exist ${l.existencia > 0 ? 'exist-ok' : 'exist-no'}">
@@ -150,7 +199,7 @@ function renderRow(b, l) {
       inp.addEventListener('change', () => tryResolve(l));
   });
   tr.querySelector('.btn-danger').onclick = () => {
-    b.lines = b.lines.filter(x => x.id !== l.id); render();
+    g.lines = g.lines.filter(x => x.id !== l.id); render();
   };
   return tr;
 }
@@ -246,7 +295,7 @@ function crossOdoo(l) {
 function renderTotals() {
   let costo = 0, venta = 0;
   for (const b of BLOCKS)
-    for (const l of b.lines) {
+    for (const l of allLines(b)) {
       const q = Number(l.cantidad) || 0;
       costo += compraDOP(l) * q;
       venta += (Number(l.venta) || 0) * q;
@@ -260,7 +309,7 @@ function renderTotals() {
 // recalcula todas las líneas USD cuando cambia la tasa
 function recalcUSD() {
   for (const b of BLOCKS)
-    for (const l of b.lines) if (l.moneda === 'USD') l.venta = ventaFromMargin(l);
+    for (const l of allLines(b)) if (l.moneda === 'USD') l.venta = ventaFromMargin(l);
   render();
 }
 
@@ -357,7 +406,7 @@ $('#tasaMercado').addEventListener('input', e => {
 });
 $('#marginGlobal').addEventListener('input', e => marginGlobal = Number(e.target.value) || 0);
 $('#applyMarginAll').onclick = () => {
-  for (const b of BLOCKS) for (const l of b.lines) {
+  for (const b of BLOCKS) for (const l of allLines(b)) {
     if (l.importado) continue;         // no pisar importados (90%)
     l.margen = marginGlobal; l.venta = ventaFromMargin(l);
   }
@@ -367,7 +416,7 @@ $('#applyMarginAll').onclick = () => {
 // ---- Nueva cotización / Export -----------------------------------------
 $('#nuevoBtn').onclick = async () => {
   if (!confirm('¿Vaciar la cotización actual y empezar una nueva?')) return;
-  for (const b of BLOCKS) b.lines = [];
+  for (const b of BLOCKS) b.grupos = [grupo(b.multi ? 'CCTV' : '')];
   meta.cliente = meta.tipoProyecto = meta.vendedor = meta.consideraciones = '';
   meta.fecha = new Date().toISOString().slice(0, 10);
   await Data.clearBorrador();
@@ -376,7 +425,7 @@ $('#nuevoBtn').onclick = async () => {
 };
 
 $('#exportBtn').onclick = () => {
-  if (!BLOCKS.some(b => b.lines.length)) { alert('Agrega al menos una línea antes de exportar.'); return; }
+  if (!BLOCKS.some(b => allLines(b).length)) { alert('Agrega al menos una línea antes de exportar.'); return; }
   exportQuote({
     meta: { ...meta, tasaAplicada: tasaAplicada() },
     blocks: BLOCKS,
@@ -413,7 +462,14 @@ async function init() {
       if (Array.isArray(b.blocks))
         for (const sb of b.blocks) {
           const blk = BLOCKS.find(x => x.id === sb.id);
-          if (blk && Array.isArray(sb.lines)) blk.lines = sb.lines;
+          if (!blk) continue;
+          if (Array.isArray(sb.grupos) && sb.grupos.length) {
+            blk.grupos = sb.grupos.map(g => ({
+              id: crypto.randomUUID(), nombre: g.nombre || '', lines: g.lines || [],
+            }));
+          } else if (Array.isArray(sb.lines)) {   // borrador en formato viejo
+            blk.grupos = [{ id: crypto.randomUUID(), nombre: blk.multi ? 'CCTV' : '', lines: sb.lines }];
+          }
         }
     }
   } catch (err) { console.error(err); }

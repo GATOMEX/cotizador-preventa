@@ -50,6 +50,12 @@ input[readonly]{color:var(--muted)}
 .block-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
 .block-head h2{font-size:15px;margin:0}
 .block-sub{font-size:12px;color:var(--muted)}
+.grupo{margin:10px 0 4px;padding-top:10px;border-top:1px dashed var(--line)}
+.grupo:first-of-type{border-top:none;padding-top:0}
+.grupo-head{display:flex;gap:8px;align-items:center;margin-bottom:6px}
+.grupo-nombre{flex:1;font-size:13px;font-weight:600;background:var(--panel-2);
+  border:1px solid var(--line);border-radius:8px;padding:6px 8px;color:var(--text)}
+.add-line{margin-top:8px}
 
 .table-wrap{overflow-x:auto;border:1px solid var(--line);border-radius:10px}
 table{width:100%;min-width:900px;border-collapse:collapse;background:var(--panel)}
